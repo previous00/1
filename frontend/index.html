@@ -1,13 +1,266 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" href="/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>智能宿舍人脸门禁管理系统</title>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
-  </body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图书管理系统</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- 导航栏 -->
+        <nav class="navbar" v-if="currentUser">
+            <div class="nav-brand">图书管理系统</div>
+            <div class="nav-links">
+                <a href="#" @click.prevent="currentView='books'" :class="{active: currentView==='books'}">图书浏览</a>
+                <a href="#" @click.prevent="currentView='myBorrows'" :class="{active: currentView==='myBorrows'}">我的借阅</a>
+                <a href="#" v-if="isAdmin" @click.prevent="currentView='manageBooks'" :class="{active: currentView==='manageBooks'}">图书管理</a>
+                <a href="#" v-if="isAdmin" @click.prevent="currentView='manageCategories'" :class="{active: currentView==='manageCategories'}">分类管理</a>
+                <a href="#" v-if="isAdmin" @click.prevent="currentView='manageBorrows'" :class="{active: currentView==='manageBorrows'}">借阅管理</a>
+            </div>
+            <div class="nav-user">
+                <span>{{currentUser.username}} ({{currentUser.role === 'admin' ? '管理员' : '读者'}})</span>
+                <button @click="logout" class="btn btn-sm">退出</button>
+            </div>
+        </nav>
+
+        <!-- 登录/注册页面 -->
+        <div v-if="!currentUser" class="auth-container">
+            <div class="auth-box">
+                <h2>{{authMode === 'login' ? '登录' : '注册'}}</h2>
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input v-model="authForm.username" type="text" placeholder="请输入用户名">
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input v-model="authForm.password" type="password" placeholder="请输入密码" @keyup.enter="handleAuth">
+                </div>
+                <button @click="handleAuth" class="btn btn-primary btn-block">
+                    {{authMode === 'login' ? '登录' : '注册'}}
+                </button>
+                <p class="auth-switch">
+                    <span v-if="authMode==='login'">还没有账号？<a href="#" @click.prevent="authMode='register'">去注册</a></span>
+                    <span v-else>已有账号？<a href="#" @click.prevent="authMode='login'">去登录</a></span>
+                </p>
+                <p v-if="authError" class="error-msg">{{authError}}</p>
+            </div>
+        </div>
+
+        <!-- 图书浏览 -->
+        <div v-if="currentUser && currentView==='books'" class="container">
+            <h2>图书浏览</h2>
+            <div class="search-bar">
+                <input v-model="searchKeyword" placeholder="搜索书名/作者/ISBN" @keyup.enter="searchBooks">
+                <select v-model="searchCategory">
+                    <option value="">全部分类</option>
+                    <option v-for="c in categories" :value="c.id">{{c.name}}</option>
+                </select>
+                <button @click="searchBooks" class="btn btn-primary">搜索</button>
+            </div>
+            <div class="book-grid">
+                <div v-for="book in books" :key="book.id" class="book-card">
+                    <h3>{{book.title}}</h3>
+                    <p class="book-author">作者：{{book.author}}</p>
+                    <p class="book-category" v-if="book.category_name">分类：{{book.category_name}}</p>
+                    <p class="book-stock">库存：{{book.available_count}} / {{book.total_count}}</p>
+                    <div class="book-actions">
+                        <button @click="viewBookDetail(book)" class="btn btn-sm">详情</button>
+                        <button @click="borrowBook(book.id)" class="btn btn-sm btn-primary" v-if="!isAdmin && book.available_count > 0">借阅</button>
+                        <span v-if="book.available_count <= 0" class="text-muted">已借完</span>
+                    </div>
+                </div>
+            </div>
+            <div v-if="books.length === 0" class="empty-state">暂无图书</div>
+            <div class="pagination" v-if="bookPages > 1">
+                <button @click="changePage(bookPage-1)" :disabled="bookPage<=1" class="btn btn-sm">上一页</button>
+                <span>第 {{bookPage}} / {{bookPages}} 页</span>
+                <button @click="changePage(bookPage+1)" :disabled="bookPage>=bookPages" class="btn btn-sm">下一页</button>
+            </div>
+        </div>
+
+        <!-- 图书详情弹窗 -->
+        <div v-if="showDetail" class="modal-overlay" @click.self="showDetail=false">
+            <div class="modal-content">
+                <h2>{{detailBook.title}}</h2>
+                <table class="detail-table">
+                    <tr><td>作者</td><td>{{detailBook.author}}</td></tr>
+                    <tr><td>ISBN</td><td>{{detailBook.isbn || '-'}}</td></tr>
+                    <tr><td>出版社</td><td>{{detailBook.publisher || '-'}}</td></tr>
+                    <tr><td>出版日期</td><td>{{detailBook.publish_date || '-'}}</td></tr>
+                    <tr><td>分类</td><td>{{detailBook.category_name || '-'}}</td></tr>
+                    <tr><td>库存</td><td>{{detailBook.available_count}} / {{detailBook.total_count}}</td></tr>
+                </table>
+                <div v-if="detailBook.description" class="book-description">
+                    <h4>简介</h4>
+                    <p>{{detailBook.description}}</p>
+                </div>
+                <button @click="showDetail=false" class="btn">关闭</button>
+            </div>
+        </div>
+
+        <!-- 我的借阅 -->
+        <div v-if="currentUser && currentView==='myBorrows'" class="container">
+            <h2>我的借阅记录</h2>
+            <table class="data-table">
+                <thead>
+                    <tr><th>图书</th><th>借阅时间</th><th>归还时间</th><th>状态</th></tr>
+                </thead>
+                <tbody>
+                    <tr v-for="r in borrowRecords" :key="r.id">
+                        <td>{{r.book_title}}</td>
+                        <td>{{formatDate(r.borrow_date)}}</td>
+                        <td>{{r.return_date ? formatDate(r.return_date) : '-'}}</td>
+                        <td><span :class="'status-' + r.status">{{r.status === 'borrowed' ? '借阅中' : '已归还'}}</span></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div v-if="borrowRecords.length === 0" class="empty-state">暂无借阅记录</div>
+            <div class="pagination" v-if="borrowPages > 1">
+                <button @click="changeBorrowPage(borrowPage-1)" :disabled="borrowPage<=1" class="btn btn-sm">上一页</button>
+                <span>第 {{borrowPage}} / {{borrowPages}} 页</span>
+                <button @click="changeBorrowPage(borrowPage+1)" :disabled="borrowPage>=borrowPages" class="btn btn-sm">下一页</button>
+            </div>
+        </div>
+
+        <!-- 图书管理（管理员） -->
+        <div v-if="currentUser && isAdmin && currentView==='manageBooks'" class="container">
+            <h2>图书管理</h2>
+            <button @click="openBookForm(null)" class="btn btn-primary">新增图书</button>
+            <table class="data-table">
+                <thead>
+                    <tr><th>书名</th><th>作者</th><th>分类</th><th>库存</th><th>操作</th></tr>
+                </thead>
+                <tbody>
+                    <tr v-for="book in adminBooks" :key="book.id">
+                        <td>{{book.title}}</td>
+                        <td>{{book.author}}</td>
+                        <td>{{book.category_name || '-'}}</td>
+                        <td>{{book.available_count}} / {{book.total_count}}</td>
+                        <td>
+                            <button @click="openBookForm(book)" class="btn btn-sm">编辑</button>
+                            <button @click="deleteBook(book.id)" class="btn btn-sm btn-danger">删除</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="pagination" v-if="adminBookPages > 1">
+                <button @click="changeAdminBookPage(adminBookPage-1)" :disabled="adminBookPage<=1" class="btn btn-sm">上一页</button>
+                <span>第 {{adminBookPage}} / {{adminBookPages}} 页</span>
+                <button @click="changeAdminBookPage(adminBookPage+1)" :disabled="adminBookPage>=adminBookPages" class="btn btn-sm">下一页</button>
+            </div>
+        </div>
+
+        <!-- 图书表单弹窗 -->
+        <div v-if="showBookForm" class="modal-overlay" @click.self="showBookForm=false">
+            <div class="modal-content">
+                <h2>{{editingBook ? '编辑图书' : '新增图书'}}</h2>
+                <div class="form-group">
+                    <label>书名 *</label>
+                    <input v-model="bookForm.title" type="text">
+                </div>
+                <div class="form-group">
+                    <label>作者 *</label>
+                    <input v-model="bookForm.author" type="text">
+                </div>
+                <div class="form-group">
+                    <label>ISBN</label>
+                    <input v-model="bookForm.isbn" type="text">
+                </div>
+                <div class="form-group">
+                    <label>出版社</label>
+                    <input v-model="bookForm.publisher" type="text">
+                </div>
+                <div class="form-group">
+                    <label>出版日期</label>
+                    <input v-model="bookForm.publish_date" type="text" placeholder="如：2024-01">
+                </div>
+                <div class="form-group">
+                    <label>分类</label>
+                    <select v-model="bookForm.category_id">
+                        <option :value="null">无分类</option>
+                        <option v-for="c in categories" :value="c.id">{{c.name}}</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>总数量</label>
+                    <input v-model.number="bookForm.total_count" type="number" min="1">
+                </div>
+                <div class="form-group">
+                    <label>简介</label>
+                    <textarea v-model="bookForm.description" rows="3"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button @click="saveBook" class="btn btn-primary">保存</button>
+                    <button @click="showBookForm=false" class="btn">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 分类管理（管理员） -->
+        <div v-if="currentUser && isAdmin && currentView==='manageCategories'" class="container">
+            <h2>分类管理</h2>
+            <div class="inline-form">
+                <input v-model="newCategoryName" placeholder="新分类名称" @keyup.enter="addCategory">
+                <button @click="addCategory" class="btn btn-primary">添加</button>
+            </div>
+            <table class="data-table">
+                <thead>
+                    <tr><th>分类名称</th><th>图书数量</th><th>操作</th></tr>
+                </thead>
+                <tbody>
+                    <tr v-for="c in categories" :key="c.id">
+                        <td>
+                            <span v-if="editingCategory !== c.id">{{c.name}}</span>
+                            <input v-else v-model="editCategoryName" @keyup.enter="updateCategory(c.id)">
+                        </td>
+                        <td>{{c.book_count}}</td>
+                        <td>
+                            <button v-if="editingCategory !== c.id" @click="startEditCategory(c)" class="btn btn-sm">编辑</button>
+                            <button v-if="editingCategory === c.id" @click="updateCategory(c.id)" class="btn btn-sm btn-primary">保存</button>
+                            <button v-if="editingCategory === c.id" @click="editingCategory=null" class="btn btn-sm">取消</button>
+                            <button @click="deleteCategory(c.id)" class="btn btn-sm btn-danger">删除</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <div v-if="categories.length === 0" class="empty-state">暂无分类</div>
+        </div>
+
+        <!-- 借阅管理（管理员） -->
+        <div v-if="currentUser && isAdmin && currentView==='manageBorrows'" class="container">
+            <h2>借阅管理</h2>
+            <table class="data-table">
+                <thead>
+                    <tr><th>读者</th><th>图书</th><th>借阅时间</th><th>归还时间</th><th>状态</th><th>操作</th></tr>
+                </thead>
+                <tbody>
+                    <tr v-for="r in allBorrowRecords" :key="r.id">
+                        <td>{{r.username}}</td>
+                        <td>{{r.book_title}}</td>
+                        <td>{{formatDate(r.borrow_date)}}</td>
+                        <td>{{r.return_date ? formatDate(r.return_date) : '-'}}</td>
+                        <td><span :class="'status-' + r.status">{{r.status === 'borrowed' ? '借阅中' : '已归还'}}</span></td>
+                        <td>
+                            <button v-if="r.status==='borrowed'" @click="returnBook(r.id)" class="btn btn-sm btn-primary">归还</button>
+                            <span v-else>-</span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <div v-if="allBorrowRecords.length === 0" class="empty-state">暂无借阅记录</div>
+            <div class="pagination" v-if="allBorrowPages > 1">
+                <button @click="changeAllBorrowPage(allBorrowPage-1)" :disabled="allBorrowPage<=1" class="btn btn-sm">上一页</button>
+                <span>第 {{allBorrowPage}} / {{allBorrowPages}} 页</span>
+                <button @click="changeAllBorrowPage(allBorrowPage+1)" :disabled="allBorrowPage>=allBorrowPages" class="btn btn-sm">下一页</button>
+            </div>
+        </div>
+
+        <!-- 提示消息 -->
+        <div v-if="message" class="toast" :class="messageType">{{message}}</div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="js/app.js"></script>
+</body>
 </html>

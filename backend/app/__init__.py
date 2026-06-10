@@ -1,39 +1,49 @@
-import os
 from flask import Flask
-from .config import Config
-from .extensions import db, jwt, cors, migrate
+from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
+from flask_jwt_extended import JWTManager
+import os
+
+db = SQLAlchemy()
+jwt = JWTManager()
 
 
-def create_app(config_class=Config):
-    app = Flask(__name__, instance_relative_config=True)
-    app.config.from_object(config_class)
+def create_app():
+    app = Flask(__name__)
 
-    os.makedirs(app.instance_path, exist_ok=True)
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(
+        os.path.abspath(os.path.dirname(__file__)), '..', 'library.db'
+    )
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['JWT_SECRET_KEY'] = 'library-management-secret-key-2024'
+    app.config['JSON_AS_ASCII'] = False
 
     db.init_app(app)
     jwt.init_app(app)
-    cors.init_app(app)
-    migrate.init_app(app, db)
+    CORS(app)
 
-    from .api import auth_bp, users_bp, students_bp, buildings_bp, rooms_bp
-    from .api import faces_bp, access_bp, visitors_bp, alerts_bp, statistics_bp
+    from app.api.auth import auth_bp
+    from app.api.books import books_bp
+    from app.api.categories import categories_bp
+    from app.api.borrows import borrows_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
-    app.register_blueprint(users_bp, url_prefix='/api/users')
-    app.register_blueprint(students_bp, url_prefix='/api/students')
-    app.register_blueprint(buildings_bp, url_prefix='/api/buildings')
-    app.register_blueprint(rooms_bp, url_prefix='/api/rooms')
-    app.register_blueprint(faces_bp, url_prefix='/api/faces')
-    app.register_blueprint(access_bp, url_prefix='/api/access')
-    app.register_blueprint(visitors_bp, url_prefix='/api/visitors')
-    app.register_blueprint(alerts_bp, url_prefix='/api/alerts')
-    app.register_blueprint(statistics_bp, url_prefix='/api/statistics')
-
-    from .errors.handlers import register_error_handlers
-    register_error_handlers(app)
+    app.register_blueprint(books_bp, url_prefix='/api/books')
+    app.register_blueprint(categories_bp, url_prefix='/api/categories')
+    app.register_blueprint(borrows_bp, url_prefix='/api/borrows')
 
     with app.app_context():
         db.create_all()
+        _init_admin(app)
 
     return app
+
+
+def _init_admin(app):
+    from app.models import User
+    admin = User.query.filter_by(username='admin').first()
+    if not admin:
+        admin = User(username='admin', role='admin')
+        admin.set_password('admin123')
+        db.session.add(admin)
+        db.session.commit()

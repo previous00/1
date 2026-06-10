@@ -1,16 +1,25 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm --version)",
+      "Bash(mkdir -p backend/app/api)",
+      "Bash(mkdir -p frontend/css)",
+      "Bash(mkdir -p frontend/js)",
       "Bash(python -m venv venv)",
       "Bash(where python *)",
       "Bash(D:/JetBrains/python.exe *)",
-      "Bash(\"D:/一面千识/face_recognition/backend/venv/Scripts/pip.exe\" install *)",
-      "Bash(\"D:/一面千识/face_recognition/backend/venv/Scripts/python.exe\" -c \"from app import create_app; app = create_app\\(\\); print\\('Flask app created successfully'\\)\")",
-      "Bash(npm create *)",
-      "Bash(npm install *)",
-      "Bash(D:/一面千识/face_recognition/backend/venv/Scripts/python.exe *)",
-      "Bash(npx vite *)"
+      "Bash(venv/Scripts/pip.exe install *)",
+      "Bash(venv/Scripts/python.exe run.py)",
+      "Bash(curl -s http://localhost:5000/api/books)",
+      "Bash(curl -s -X POST http://localhost:5000/api/auth/login -H \"Content-Type: application/json\" -d '{\"username\":\"admin\",\"password\":\"admin123\"}')",
+      "Bash(curl -s -X POST http://localhost:5000/api/auth/login -H \"Content-Type: application/json\" -d \"{\\\\\"username\\\\\":\\\\\"admin\\\\\",\\\\\"password\\\\\":\\\\\"admin123\\\\\"}\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/)",
+      "Bash(curl -s http://localhost:8080/)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //PID 2700 //F)",
+      "Bash(curl -s -w \"\\\\nHTTP Status: %{http_code}\\\\n\" http://localhost:5000/api/books)",
+      "Bash(curl -s -o /dev/null -w \"HTTP Status: %{http_code}\\\\n\" http://localhost:8080/)",
+      "Bash(taskkill //PID 14780 //F)",
+      "Bash(taskkill *)"
     ]
   }
 }
